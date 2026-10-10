@@ -12,7 +12,9 @@ export type Usage = {
   tokens: number | null
   window: number
   costUsd: number | null
-  limits: { kind: string; pct: number }[]
+  /** `resetsAt`: when the window resets, in ms since the epoch; null when the API gave no time,
+   *  absent in state saved before it was kept. */
+  limits: { kind: string; pct: number; resetsAt?: number | null }[]
   compactions: number
   lastCompactAt: number | null
 }

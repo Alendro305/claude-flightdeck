@@ -11,9 +11,11 @@ import {
   describeInput,
   endConsult,
   fitLegend,
+  fmtResetIn,
   gateSummary,
   lanes,
   limitLabel,
+  limitOf,
   logRows,
   momentOf,
   normalizeCard,
@@ -180,6 +182,14 @@ test('layout math: lanes share one axis, the log gets 4-8 rows, the legend never
   expect(titleLines('Write tinyqueue test suite', 13, 16)).toEqual(['Write', 'tinyqueue test…'])
   expect(titleLines('Short', 13, 16)).toEqual(['Short', ''])
   expect(receiptOf({ ...DEFAULT_TURN, costAtStart: 1, edits: 2 }, { durationMs: 1000, agentsSince: 3, costNow: 1.5, reason: 'answer' }).costDelta).toBe(0.5)
+})
+
+test('a window keeps its reset time, drawn as the time left', () => {
+  expect(limitOf({ kind: 'five_hour', percentUsed: 19, resetsAt: '1970-01-01T03:10:00.000Z' })).toEqual({ kind: 'five_hour', pct: 19, resetsAt: 11_400_000 })
+  expect(limitOf({ kind: 'seven_day', percentUsed: 3 }).resetsAt).toBe(null)
+  expect(limitOf({ kind: 'spend_limit', percentUsed: 1, resetsAt: 'soon' }).resetsAt).toBe(null)
+  expect([fmtResetIn(11_400_000, 0), fmtResetIn(25 * 60_000 + 5_000, 0), fmtResetIn(4 * 86_400_000 + 2 * 3_600_000, 0)]).toEqual(['3h10m', '25m', '4d2h'])
+  expect([fmtResetIn(null, 0), fmtResetIn(undefined, 0), fmtResetIn(5, 10)]).toEqual(['', '', ''])
 })
 
 // ---------------------------------------------------------------- drawing
@@ -418,4 +428,28 @@ test("a background architect's advice is read from its hand-back", async ($, on)
   const ui = await $.ui.mount({ ...pane(64), surface: 'terminal' })
   expect(await ui.find({ text: /» Ship it after one more gate test\./ })).toBeDefined()
   await ui.unmount()
+})
+
+test('each rate-limit window shows the time to its reset where the main panel has room', async ($, on) => {
+  engine(on)
+  on('session.measure', (_$, e) => ({ changed: e.changed }))
+  const at = (ms: number) => new Date(ms).toISOString()
+  await $.session.measure({
+    context: { window: 200_000 },
+    rateLimits: [
+      { kind: 'five_hour', percentUsed: 19, resetsAt: at(3 * 3_600_000 + 10 * 60_000) },
+      { kind: 'seven_day', percentUsed: 3, resetsAt: at(4 * 86_400_000 + 2 * 3_600_000) },
+    ],
+    changed: ['rateLimits'],
+  })
+  for (const cols of [64, 120]) {
+    const ui = await $.ui.mount({ ...pane(cols), surface: 'terminal' })
+    expect(await ui.find({ text: /19% ↻3h10m/ })).toBeDefined()
+    expect(await ui.find({ text: /3% ↻4d2h/ })).toBeDefined()
+    await ui.unmount()
+  }
+  const narrow = await $.ui.mount({ ...pane(40), surface: 'terminal' })
+  expect(await narrow.find({ text: /19%/ })).toBeDefined()
+  expect(await narrow.find({ text: /↻/ })).toBeUndefined() // no room: the gauges stay whole
+  await narrow.unmount()
 })
