@@ -317,16 +317,18 @@ export const register: Register = (on, options) => {
         return { ...x, model: e.model, effort: String(e.effort ?? x.effort), steps: x.steps + 1 }
       })
       // Time the response as it passes: the first piece that is not the engine's envelope, then the
-      // stop. Two clock reads in the stream and nothing stored until it has ended.
+      // stop chunk. Two clock reads in the stream and nothing stored until it has ended.
       const sentAt = await $.clock.now()
       let firstAt: number | null = null
+      let stopAt: number | null = null
       const s = next(e)
       for await (const c of s) {
-        if (firstAt === null && c.kind !== 'engine') firstAt = await $.clock.now()
+        if (c.kind === 'stop') stopAt = await $.clock.now()
+        else if (firstAt === null && c.kind !== 'engine') firstAt = await $.clock.now()
         yield c
       }
       const result = await s.result
-      const speed = result.usage ? stepSpeed(sentAt, firstAt, await $.clock.now(), result.usage.output_tokens) : null
+      const speed = result.usage && stopAt !== null ? stepSpeed(sentAt, firstAt, stopAt, result.usage.output_tokens) : null
       if (speed) await update($, main, m => ({ ...normalize(DEFAULT_MAIN, m), speed }))
       return result
     }
