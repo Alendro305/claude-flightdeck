@@ -25,7 +25,7 @@ export const SCHEMA_VERSION = 2
 
 // ---------------------------------------------------------------- defaults
 
-export const DEFAULT_MAIN: Main = { model: '', effort: '', mode: '', steps: 0, isRunning: false }
+export const DEFAULT_MAIN: Main = { model: '', effort: '', mode: '', steps: 0, isRunning: false, speed: null }
 export const DEFAULT_USAGE: Usage = {
   pct: null,
   tokens: null,
@@ -230,13 +230,30 @@ export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' :
 
 export const fmtUsd = (n: number) => (n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`)
 
+/**
+ * How fast a request answered, from three readings of the clock: when it was sent, when its first
+ * piece of response arrived, and when it stopped. Null when no response came. `tokPerS` is null
+ * when there is no usage or no time between the first piece and the stop to divide by.
+ */
+export const stepSpeed = (sentAt: number, firstAt: number | null, stopAt: number, outTokens: number | null) => {
+  if (firstAt === null) return null
+  const decodeMs = stopAt - firstAt
+  return {
+    ttftMs: Math.max(0, firstAt - sentAt),
+    tokPerS: outTokens !== null && outTokens > 0 && decodeMs > 0 ? (outTokens * 1000) / decodeMs : null,
+  }
+}
+
+/** `ttft 0.8s · 42 tok/s`; the rate is left off when it is unknown. */
+export const fmtSpeed = (s: { ttftMs: number; tokPerS: number | null }) =>
+  `ttft ${(s.ttftMs / 1000).toFixed(1)}s` + (s.tokPerS !== null ? ` · ${Math.round(s.tokPerS)} tok/s` : '')
+
 /** A gauge of `width` cells: ▰ filled, ▱ empty. */
 export const gauge = (pct: number, width: number) => {
   const full = Math.max(0, Math.min(width, Math.round((pct / 100) * width)))
   return { on: '▰'.repeat(full), off: '▱'.repeat(width - full) }
 }
 
-/** A rate-limit window's short name: `five_hour` → `5h`, `seven_day_opus` → `7d opus`. */
 /** A rate-limit reading as the pane keeps it, its ISO reset time turned into ms since the epoch. */
 export const limitOf = (r: { kind: string; percentUsed: number; resetsAt?: string }) => {
   const at = r.resetsAt ? Date.parse(r.resetsAt) : NaN
@@ -253,6 +270,7 @@ export const fmtResetIn = (resetsAt: number | null | undefined, now: number) => 
   return h > 0 ? `${h}h${String(m % 60).padStart(2, '0')}m` : `${m}m`
 }
 
+/** A rate-limit window's short name: `five_hour` → `5h`, `seven_day_opus` → `7d opus`. */
 export const limitLabel = (kind: string) =>
   kind
     .replace(/five[_ -]?hours?/i, '5h')

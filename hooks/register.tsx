@@ -35,6 +35,7 @@ import {
   limitLabel,
   limitOf,
   fmtResetIn,
+  fmtSpeed,
   listOf,
   logRows,
   momentOf,
@@ -55,6 +56,7 @@ import {
   settleCheck,
   shorten,
   startConsult,
+  stepSpeed,
   stepLoop,
 } from './core'
 import type { Config, Panel } from './core'
@@ -314,7 +316,21 @@ export const register: Register = (on, options) => {
         const x = normalize(DEFAULT_MAIN, m)
         return { ...x, model: e.model, effort: String(e.effort ?? x.effort), steps: x.steps + 1 }
       })
-      return yield* next(e)
+      // Time the response as it passes: the first piece that is not the engine's envelope, then the
+      // stop chunk. Two clock reads in the stream and nothing stored until it has ended.
+      const sentAt = await $.clock.now()
+      let firstAt: number | null = null
+      let stopAt: number | null = null
+      const s = next(e)
+      for await (const c of s) {
+        if (c.kind === 'stop') stopAt = await $.clock.now()
+        else if (firstAt === null && c.kind !== 'engine') firstAt = await $.clock.now()
+        yield c
+      }
+      const result = await s.result
+      const speed = result.usage && stopAt !== null ? stepSpeed(sentAt, firstAt, stopAt, result.usage.output_tokens) : null
+      if (speed) await update($, main, m => ({ ...normalize(DEFAULT_MAIN, m), speed }))
+      return result
     }
     const result = yield* next(e)
     const id = e.agentId
@@ -632,6 +648,7 @@ export const register: Register = (on, options) => {
             })}
           </Text>
         ) : null}
+        {m.speed ? <Text dimColor wrap="truncate">{`last req  ${fmtSpeed(m.speed)}`}</Text> : null}
       </Box>
     )
 
@@ -908,14 +925,15 @@ export const register: Register = (on, options) => {
     }
 
     // ---- log: whatever rows the other panels leave, 4 to 8
-    const used = 2 + 5 + (showArchitect ? 6 : 0) + 6 + (v.gateOpen ? 5 : 0) + (cards.length > cfg.maxCards ? 3 + Math.min(6, cards.length) : 8) + (expandedCard ? 8 : 0) + (lp.length ? 1 : 0) + 3
+    // The main box's speed line and the gap above the log are a row each.
+    const used = 2 + 5 + (m.speed ? 1 : 0) + 1 + (showArchitect ? 6 : 0) + 6 + (v.gateOpen ? 5 : 0) + (cards.length > cfg.maxCards ? 3 + Math.min(6, cards.length) : 8) + (expandedCard ? 8 : 0) + (lp.length ? 1 : 0) + 3
     const bodyRows = e.props.scroll?.bodyRows ?? e.viewport?.rows ?? 40
     const nLog = logRows(bodyRows, used)
     const shownLines = (viewed ? lines.filter(l => l.agentId === viewed) : lines).slice(-nLog)
     const colorOf = (l: LogLine) =>
       l.kind === 'error' ? C.warn : l.kind === 'consult' ? C.arch : l.who === 'main' ? C.main : l.who === 'gate' ? C.gate : l.who === 'you' ? C.text : C.agent
     const logPanel = (w: number) => (
-      <Box flexDirection="column" borderStyle="round" borderColor={C.faint} paddingX={1} width={w}>
+      <Box flexDirection="column" borderStyle="round" borderColor={C.faint} paddingX={1} marginTop={1} width={w}>
         <Text dimColor>{viewed ? 'session log · this agent' : 'session log'}</Text>
         {shownLines.length === 0 ? <Text color={C.faint}>nothing yet</Text> : null}
         {shownLines.map(l => (
