@@ -33,6 +33,8 @@ import {
   kTokens,
   lanes,
   limitLabel,
+  limitOf,
+  fmtResetIn,
   listOf,
   logRows,
   momentOf,
@@ -232,7 +234,7 @@ export const register: Register = (on, options) => {
         tokens: u.context.tokens ?? null,
         window: u.context.window,
         costUsd: u.cost?.usd ?? null,
-        limits: u.rateLimits.map(r => ({ kind: r.kind, pct: r.percentUsed })),
+        limits: u.rateLimits.map(limitOf),
       }))
     }
     if (cfg.openOnStart) void openPane($).catch(() => undefined)
@@ -335,7 +337,7 @@ export const register: Register = (on, options) => {
       tokens: e.context.tokens ?? null,
       window: e.context.window,
       costUsd: e.cost?.usd ?? null,
-      limits: e.rateLimits.map(r => ({ kind: r.kind, pct: r.percentUsed })),
+      limits: e.rateLimits.map(limitOf),
     }))
     if (e.changed.includes('context')) await refreshStatus($, cfg)
     return next(e)
@@ -616,12 +618,15 @@ export const register: Register = (on, options) => {
             {u.costUsd !== null ? <Text color={C.text}>{`${fmtUsd(u.costUsd)}   `}</Text> : null}
             {u.limits.slice(0, 2).map(l => {
               const lg = gauge(l.pct, 5)
+              // The time to each reset where the line has room for it: both windows fit from 56 columns,
+              // so a wide pane's half column (59 at 120) has them and a 40-column pane keeps its gauges.
+              const resetIn = w >= 56 ? fmtResetIn(l.resetsAt, now) : ''
               return (
                 <Text wrap="truncate">
                   <Text dimColor>{`${limitLabel(l.kind)} `}</Text>
                   <Text color={l.pct >= 80 ? C.warn : C.main}>{lg.on}</Text>
                   <Text color={C.faint}>{lg.off}</Text>
-                  <Text dimColor>{` ${Math.round(l.pct)}%  `}</Text>
+                  <Text dimColor>{` ${Math.round(l.pct)}%${resetIn ? ` ↻${resetIn}` : ''}  `}</Text>
                 </Text>
               )
             })}

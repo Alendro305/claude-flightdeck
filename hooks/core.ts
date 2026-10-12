@@ -237,6 +237,22 @@ export const gauge = (pct: number, width: number) => {
 }
 
 /** A rate-limit window's short name: `five_hour` → `5h`, `seven_day_opus` → `7d opus`. */
+/** A rate-limit reading as the pane keeps it, its ISO reset time turned into ms since the epoch. */
+export const limitOf = (r: { kind: string; percentUsed: number; resetsAt?: string }) => {
+  const at = r.resetsAt ? Date.parse(r.resetsAt) : NaN
+  return { kind: r.kind, pct: r.percentUsed, resetsAt: Number.isFinite(at) ? at : null }
+}
+
+/** Time left until a window resets, its two largest units: `25m`, `3h10m`, `4d2h`; empty when unknown or past. */
+export const fmtResetIn = (resetsAt: number | null | undefined, now: number) => {
+  if (resetsAt === null || resetsAt === undefined || resetsAt <= now) return ''
+  const m = Math.max(1, Math.floor((resetsAt - now) / 60_000))
+  const d = Math.floor(m / 1440)
+  const h = Math.floor((m % 1440) / 60)
+  if (d > 0) return `${d}d${h}h`
+  return h > 0 ? `${h}h${String(m % 60).padStart(2, '0')}m` : `${m}m`
+}
+
 export const limitLabel = (kind: string) =>
   kind
     .replace(/five[_ -]?hours?/i, '5h')
