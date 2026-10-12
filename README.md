@@ -59,7 +59,7 @@ https://github.com/user-attachments/assets/9ad0fcc3-c81c-427a-a743-f7b6c49f5885
 
 | Panel | Shows | From |
 | --- | --- | --- |
-| **main** | model, effort, permission mode, request count; a context gauge with compactions (⟲); cost and the first two rate-limit windows when your plan reports them, with the time to each reset (↻) from 56 columns | `turn.step`, `session.measure`, `session.compact`, `$.session.usage()` |
+| **main** | model, effort, permission mode, request count; a context gauge with compactions (⟲); cost and the first two rate-limit windows when your plan reports them, with the time to each reset (↻) from 56 columns; the last main-loop request's time to first token and output tokens per second | `turn.step`, `session.measure`, `session.compact`, `$.session.usage()` |
 | **architect** | consults on a timeline, whether one is running, how long the last took; optionally the moment of each consult; the first line of a subagent architect's advice | a spawn of a matching agent type, or a matching server tool in the assistant's rows |
 | **gate** | one cell per permission check: green allowed without asking, blue decided by the auto-mode classifier or you and then run, amber pending, red ✗ denied, dim if made inside a subagent. Totals, and a drill-down per tool family with credentials masked | `tool.check`, settled by the `tool.call` around it |
 | **agents** | cards side by side while they fit: the task, type, live context and output tokens, steps, a running clock, `max_tokens` in red. Beyond that, swimlanes on one time axis | `agent.spawn`, `turn.step`, `tool.call`, `turn.complete` |
@@ -117,6 +117,7 @@ What it keeps: short summaries (a tool name plus a path or command, with credent
 - **Per-agent context is the latest request's whole input** (uncached + cache read + cache write). It is labelled `ctx`, not cost: the API has no per-agent cost.
 - **Other loops** can't tell a workflow agent from a compaction fork; both are model loops no card claims.
 - **A background agent's first step** can arrive before its card exists, so its usage may show one step late.
+- **Request speed.** `ttft` and `tok/s` are timed at Flightdeck's own `turn.step` hook, so they include everything beneath it: other plugins' hooks, the engine, the network and any retry. `tok/s` divides the reported `output_tokens` (thinking included) by the time from the first piece of response to the stop. Measured, not inferred, but not the API's own figures.
 
 ## Configure
 

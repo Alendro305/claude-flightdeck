@@ -5,7 +5,16 @@ export type Bucket = 'file' | 'shell' | 'other'
 /** rule: settings allowed it. ask: put to the decider, outcome pending. cleared: asked, then ran. deny: refused. */
 export type Verdict = 'rule' | 'ask' | 'cleared' | 'deny'
 
-export type Main = { model: string; effort: string; mode: string; steps: number; isRunning: boolean }
+export type Main = {
+  model: string
+  effort: string
+  mode: string
+  steps: number
+  isRunning: boolean
+  /** The main loop's last answered request: time to its first piece of response, and output tokens
+   *  per second from that piece to the stop. Null until one is measured, absent in older state. */
+  speed?: { ttftMs: number; tokPerS: number | null } | null
+}
 
 export type Usage = {
   pct: number | null
